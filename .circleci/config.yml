@@ -33,6 +33,16 @@ jobs:
           name: Run linter
           command: yarn lint
 
+      # テスト実行
+      - run:
+          name: Run tests with coverage
+          command: yarn test:coverage
+
+      # カバレッジレポートを保存
+      - store_artifacts:
+          path: coverage
+          destination: coverage-report
+
       # ビルド実行
       - run:
           name: Build project
@@ -48,6 +58,7 @@ jobs:
           root: .
           paths:
             - dist
+            - coverage
 
   comment-on-pr:
     docker:

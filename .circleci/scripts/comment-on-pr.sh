@@ -9,6 +9,28 @@ if [ -n "$CIRCLE_PULL_REQUEST" ]; then
   echo "=== Posting comment to PR #$PR_NUMBER ==="
   echo "Authentication method used: $AUTH_METHOD"
 
+  # カバレッジ情報を読み込む
+  if [ -f "coverage/coverage-summary.json" ]; then
+    STATEMENTS=$(cat coverage/coverage-summary.json | grep -o '"statements":{"total":[0-9]*,"covered":[0-9]*,"skipped":[0-9]*,"pct":[0-9.]*' | grep -o '"pct":[0-9.]*' | cut -d':' -f2)
+    BRANCHES=$(cat coverage/coverage-summary.json | grep -o '"branches":{"total":[0-9]*,"covered":[0-9]*,"skipped":[0-9]*,"pct":[0-9.]*' | grep -o '"pct":[0-9.]*' | cut -d':' -f2)
+    FUNCTIONS=$(cat coverage/coverage-summary.json | grep -o '"functions":{"total":[0-9]*,"covered":[0-9]*,"skipped":[0-9]*,"pct":[0-9.]*' | grep -o '"pct":[0-9.]*' | cut -d':' -f2)
+    LINES=$(cat coverage/coverage-summary.json | grep -o '"lines":{"total":[0-9]*,"covered":[0-9]*,"skipped":[0-9]*,"pct":[0-9.]*' | grep -o '"pct":[0-9.]*' | cut -d':' -f2)
+
+    COVERAGE_SECTION=$(cat <<EOF
+
+**Test Coverage (C1 - Statement Coverage):**
+- **Statements:** ${STATEMENTS}%
+- **Branches:** ${BRANCHES}%
+- **Functions:** ${FUNCTIONS}%
+- **Lines:** ${LINES}%
+
+[View detailed coverage report]($CIRCLE_BUILD_URL/artifacts)
+EOF
+)
+  else
+    COVERAGE_SECTION=""
+  fi
+
   # ビルド結果のサマリーを作成
   COMMENT_BODY=$(cat <<EOF
 ## CircleCI Build Report
@@ -27,7 +49,9 @@ if [ -n "$CIRCLE_PULL_REQUEST" ]; then
 
 **Results:**
 - ✅ Linting passed
+- ✅ Tests passed
 - ✅ Build completed successfully
+${COVERAGE_SECTION}
 
 [View full build details]($CIRCLE_BUILD_URL)
 EOF
