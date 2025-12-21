@@ -72,7 +72,7 @@ jobs:
               PR_NUMBER=$(echo $CIRCLE_PULL_REQUEST | sed 's/.*\/pull\///')
 
               # ビルド結果のサマリーを作成
-              COMMENT_BODY=$(cat <<EOF
+              COMMENT_BODY=$(cat \<<EOF
             ## CircleCI Build Report
 
             ✅ Build successful
