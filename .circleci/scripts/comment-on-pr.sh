@@ -11,20 +11,45 @@ if [ -n "$CIRCLE_PULL_REQUEST" ]; then
 
   # カバレッジ情報を読み込む
   if [ -f "coverage/coverage-summary.json" ]; then
-    STATEMENTS=$(cat coverage/coverage-summary.json | grep -o '"statements":{"total":[0-9]*,"covered":[0-9]*,"skipped":[0-9]*,"pct":[0-9.]*' | grep -o '"pct":[0-9.]*' | cut -d':' -f2)
-    BRANCHES=$(cat coverage/coverage-summary.json | grep -o '"branches":{"total":[0-9]*,"covered":[0-9]*,"skipped":[0-9]*,"pct":[0-9.]*' | grep -o '"pct":[0-9.]*' | cut -d':' -f2)
-    FUNCTIONS=$(cat coverage/coverage-summary.json | grep -o '"functions":{"total":[0-9]*,"covered":[0-9]*,"skipped":[0-9]*,"pct":[0-9.]*' | grep -o '"pct":[0-9.]*' | cut -d':' -f2)
-    LINES=$(cat coverage/coverage-summary.json | grep -o '"lines":{"total":[0-9]*,"covered":[0-9]*,"skipped":[0-9]*,"pct":[0-9.]*' | grep -o '"pct":[0-9.]*' | cut -d':' -f2)
+    echo "=== Reading coverage information ==="
+
+    # Python3を使用してJSONをパース（より確実）
+    COVERAGE_DATA=$(python3 .circleci/scripts/parse-coverage.py)
+
+    # Total coverage
+    IFS='|' read -r TOTAL_STATEMENTS TOTAL_BRANCHES TOTAL_FUNCTIONS TOTAL_LINES <<< "$(echo "$COVERAGE_DATA" | head -1)"
+
+    echo "Total Coverage - Statements: $TOTAL_STATEMENTS%, Branches: $TOTAL_BRANCHES%, Functions: $TOTAL_FUNCTIONS%, Lines: $TOTAL_LINES%"
+
+    # ファイルごとのカバレッジ詳細
+    COVERAGE_DETAILS=""
+    while IFS= read -r line; do
+      if [[ $line == FILE* ]]; then
+        IFS='|' read -r _ FILE_PATH FILE_STATEMENTS FILE_BRANCHES FILE_FUNCTIONS FILE_LINES <<< "$line"
+        COVERAGE_DETAILS="${COVERAGE_DETAILS}| ${FILE_PATH} | ${FILE_STATEMENTS}% | ${FILE_BRANCHES}% | ${FILE_FUNCTIONS}% | ${FILE_LINES}% |"$'\n'
+      fi
+    done <<< "$COVERAGE_DATA"
+
+    # Artifactsへのリンク（CircleCIの正しい形式）
+    ARTIFACTS_URL="https://app.circleci.com/pipelines/github/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}/${CIRCLE_BUILD_NUM}/workflows/${CIRCLE_WORKFLOW_ID}/jobs/${CIRCLE_BUILD_NUM}/artifacts"
 
     COVERAGE_SECTION=$(cat <<EOF
 
-**Test Coverage (C1 - Statement Coverage):**
-- **Statements:** ${STATEMENTS}%
-- **Branches:** ${BRANCHES}%
-- **Functions:** ${FUNCTIONS}%
-- **Lines:** ${LINES}%
+## 📊 Test Coverage Report (C1 - Statement Coverage)
 
-[View detailed coverage report]($CIRCLE_BUILD_URL/artifacts)
+### Overall Coverage
+| Metric | Coverage |
+|--------|----------|
+| **Statements** | ${TOTAL_STATEMENTS}% |
+| **Branches** | ${TOTAL_BRANCHES}% |
+| **Functions** | ${TOTAL_FUNCTIONS}% |
+| **Lines** | ${TOTAL_LINES}% |
+
+### Coverage by File
+| File | Statements | Branches | Functions | Lines |
+|------|------------|----------|-----------|-------|
+${COVERAGE_DETAILS}
+[📁 View detailed HTML coverage report](${ARTIFACTS_URL})
 EOF
 )
   else
@@ -43,9 +68,6 @@ EOF
 - **Build Number:** $CIRCLE_BUILD_NUM
 - **Branch:** $CIRCLE_BRANCH
 - **Auth Method:** $AUTH_METHOD
-
-**Artifacts:**
-- [View build artifacts]($CIRCLE_BUILD_URL/artifacts)
 
 **Results:**
 - ✅ Linting passed
