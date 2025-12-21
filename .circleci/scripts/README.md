@@ -19,15 +19,10 @@ GitHub認証をセットアップするスクリプト。
 ### comment-on-pr.sh
 PRにビルド結果とカバレッジ情報をコメントするスクリプト。
 
-**カバレッジ情報のパース方法:**
-1. **Python3を使用**（推奨）
-   - `parse-coverage.py`を実行
-   - JSONの正確なパースが可能
-
-2. **Bash（フォールバック）**
-   - Python3が利用できない環境での代替手段
-   - sedとgrepを使用したJSONパース
-   - Python3と同じ出力形式を保証
+**カバレッジ情報のパース:**
+- `parse-coverage.py`（Python3）を使用
+- JSONの正確なパースが可能
+- **要件:** Python3が必須
 
 **環境変数:**
 - `CIRCLE_PULL_REQUEST`: PR URL
@@ -59,29 +54,44 @@ python3 .circleci/scripts/parse-coverage.py
 
 ## テスト方法
 
-### Bashフォールバックのテスト
+### カバレッジパースのテスト
 ```bash
-# Python3を使わずにBashのみでカバレッジをパース
+# カバレッジデータを生成
 cd /path/to/project
-COVERAGE_JSON=$(cat coverage/coverage-summary.json)
-TOTAL_STATEMENTS=$(echo "$COVERAGE_JSON" | sed 's/.*"total":{//' | grep -o '"statements":{[^}]*}' | grep -o '"pct":[0-9.]*' | head -1 | cut -d':' -f2)
-echo "Statements: $TOTAL_STATEMENTS%"
+yarn test:coverage
+
+# Python3でパース
+python3 .circleci/scripts/parse-coverage.py
 ```
 
-### Python版とBash版の比較
+### コメント生成のテスト
 ```bash
-echo "=== Python version ==="
-python3 .circleci/scripts/parse-coverage.py
-
-echo "=== Bash version ==="
-# Bashフォールバックのコードを実行
+# Mock環境変数でスクリプトを実行
+CIRCLE_PULL_REQUEST="https://github.com/user/repo/pull/1" \
+CIRCLE_WORKFLOW_ID="test-workflow" \
+CIRCLE_JOB="test-job" \
+CIRCLE_BUILD_NUM="123" \
+CIRCLE_BRANCH="test-branch" \
+AUTH_METHOD="TEST" \
+CIRCLE_PROJECT_USERNAME="user" \
+CIRCLE_PROJECT_REPONAME="repo" \
+CIRCLE_BUILD_URL="https://test.com" \
+bash .circleci/scripts/comment-on-pr.sh
 ```
 
 ## トラブルシューティング
 
+### Python3が見つからないエラー
+```
+ERROR: Python3 is required for coverage parsing but was not found
+```
+- CircleCIのDockerイメージにPython3が含まれていることを確認
+- 標準の`cimg/node`イメージにはPython3が含まれています
+
 ### カバレッジ情報が表示されない
 - `coverage/coverage-summary.json`が存在するか確認
 - Jestの`coverageReporters`に`json-summary`が含まれているか確認
+- `parse-coverage.py`が正常に実行できるか確認
 
 ### Artifacts URLが404になる
 - CircleCIのビルド番号とワークフローIDが正しいか確認

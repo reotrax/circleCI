@@ -13,59 +13,23 @@ if [ -n "$CIRCLE_PULL_REQUEST" ]; then
   if [ -f "coverage/coverage-summary.json" ]; then
     echo "=== Reading coverage information ==="
 
-    # Python3版を実行
-    PYTHON_AVAILABLE=false
-    if command -v python3 > /dev/null 2>&1; then
-      echo "Parsing with Python3..."
-      PYTHON_AVAILABLE=true
-      COVERAGE_DATA_PYTHON=$(python3 .circleci/scripts/parse-coverage.py)
-      echo "Python result: $COVERAGE_DATA_PYTHON"
-    else
-      echo "Python3 not found"
-      COVERAGE_DATA_PYTHON=""
+    # Python3の存在チェック
+    if ! command -v python3 > /dev/null 2>&1; then
+      echo "❌ ERROR: Python3 is required for coverage parsing but was not found"
+      echo "Please ensure Python3 is installed in your CircleCI environment"
+      exit 1
     fi
 
-    # Bash版を実行（常に実行）
-    echo "Parsing with Bash..."
-    COVERAGE_JSON=$(cat coverage/coverage-summary.json)
+    # Python3でカバレッジをパース
+    echo "Parsing coverage with Python3..."
+    COVERAGE_DATA=$(python3 .circleci/scripts/parse-coverage.py)
 
-    # Total coverageを抽出（totalブロック内から各メトリクスを抽出）
-    BASH_STATEMENTS=$(echo "$COVERAGE_JSON" | sed 's/.*"total":{//' | grep -o '"statements":{[^}]*}' | grep -o '"pct":[0-9.]*' | head -1 | cut -d':' -f2)
-    BASH_BRANCHES=$(echo "$COVERAGE_JSON" | sed 's/.*"total":{//' | grep -o '"branches":{[^}]*}' | grep -o '"pct":[0-9.]*' | head -1 | cut -d':' -f2)
-    BASH_FUNCTIONS=$(echo "$COVERAGE_JSON" | sed 's/.*"total":{//' | grep -o '"functions":{[^}]*}' | grep -o '"pct":[0-9.]*' | head -1 | cut -d':' -f2)
-    BASH_LINES=$(echo "$COVERAGE_JSON" | sed 's/.*"total":{//' | grep -o '"lines":{[^}]*}' | grep -o '"pct":[0-9.]*' | head -1 | cut -d':' -f2)
-
-    # 出力形式をPythonスクリプトと同じにする
-    COVERAGE_DATA_BASH="${BASH_STATEMENTS}|${BASH_BRANCHES}|${BASH_FUNCTIONS}|${BASH_LINES}"
-
-    # ファイルごとのカバレッジを抽出
-    while IFS= read -r line; do
-      if [[ $line == *"src/"* ]]; then
-        # ファイルパスを抽出
-        FILE_PATH=$(echo "$line" | grep -o '"/[^"]*src/[^"]*"' | tr -d '"' | sed 's|.*/src/|src/|')
-
-        if [ -n "$FILE_PATH" ]; then
-          # そのファイルのカバレッジ情報を抽出
-          FILE_STATEMENTS=$(echo "$line" | grep -o '"statements":{[^}]*"pct":[0-9.]*' | grep -o '[0-9.]*$')
-          FILE_BRANCHES=$(echo "$line" | grep -o '"branches":{[^}]*"pct":[0-9.]*' | grep -o '[0-9.]*$')
-          FILE_FUNCTIONS=$(echo "$line" | grep -o '"functions":{[^}]*"pct":[0-9.]*' | grep -o '[0-9.]*$')
-          FILE_LINES=$(echo "$line" | grep -o '"lines":{[^}]*"pct":[0-9.]*' | grep -o '[0-9.]*$')
-
-          COVERAGE_DATA_BASH="${COVERAGE_DATA_BASH}"$'\n'"FILE|${FILE_PATH}|${FILE_STATEMENTS}|${FILE_BRANCHES}|${FILE_FUNCTIONS}|${FILE_LINES}"
-        fi
-      fi
-    done < coverage/coverage-summary.json
-
-    echo "Bash result: $COVERAGE_DATA_BASH"
-
-    # Python版が利用可能な場合はそれを使用、なければBash版を使用
-    if [ "$PYTHON_AVAILABLE" = true ]; then
-      COVERAGE_DATA="$COVERAGE_DATA_PYTHON"
-      PARSE_METHOD="Python3"
-    else
-      COVERAGE_DATA="$COVERAGE_DATA_BASH"
-      PARSE_METHOD="Bash (fallback)"
+    if [ -z "$COVERAGE_DATA" ]; then
+      echo "❌ ERROR: Failed to parse coverage data"
+      exit 1
     fi
+
+    echo "Coverage data parsed successfully"
 
     # Total coverage
     IFS='|' read -r TOTAL_STATEMENTS TOTAL_BRANCHES TOTAL_FUNCTIONS TOTAL_LINES <<< "$(echo "$COVERAGE_DATA" | head -1)"
@@ -81,56 +45,20 @@ if [ -n "$CIRCLE_PULL_REQUEST" ]; then
       fi
     done <<< "$COVERAGE_DATA"
 
-    # 両方のパース結果を比較用セクションに含める
-    if [ "$PYTHON_AVAILABLE" = true ]; then
-      # 両方が一致するかチェック
-      if [ "$COVERAGE_DATA_PYTHON" = "$COVERAGE_DATA_BASH" ]; then
-        PARSE_COMPARISON="✅ Both parsing methods (Python3 & Bash) produced identical results"
-      else
-        PARSE_COMPARISON="⚠️ Python3 and Bash parsing results differ"
-      fi
-
-      PARSE_DETAILS=$(cat <<EOF
+    # パース詳細セクション（オプション）
+    PARSE_DETAILS=$(cat <<EOF
 
 <details>
-<summary>📋 Coverage Parsing Details (Click to expand)</summary>
+<summary>📋 Coverage Data (Click to expand)</summary>
 
-**Parse Method Used:** ${PARSE_METHOD}
-
-**Python3 Output:**
+**Raw Coverage Data:**
 \`\`\`
-${COVERAGE_DATA_PYTHON}
+${COVERAGE_DATA}
 \`\`\`
-
-**Bash Output:**
-\`\`\`
-${COVERAGE_DATA_BASH}
-\`\`\`
-
-**Comparison:** ${PARSE_COMPARISON}
 
 </details>
 EOF
 )
-    else
-      PARSE_DETAILS=$(cat <<EOF
-
-<details>
-<summary>📋 Coverage Parsing Details (Click to expand)</summary>
-
-**Parse Method Used:** ${PARSE_METHOD}
-
-**Bash Output:**
-\`\`\`
-${COVERAGE_DATA_BASH}
-\`\`\`
-
-**Note:** Python3 was not available in this environment.
-
-</details>
-EOF
-)
-    fi
 
     # Artifactsへのリンク（CircleCIの正しい形式）
     ARTIFACTS_URL="https://app.circleci.com/pipelines/github/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}/${CIRCLE_BUILD_NUM}/workflows/${CIRCLE_WORKFLOW_ID}/jobs/${CIRCLE_BUILD_NUM}/artifacts"
