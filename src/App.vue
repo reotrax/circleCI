@@ -1,29 +1,39 @@
 <template>
   <div id="app">
-    <h1>{{ message }}</h1>
-    <p>Count: {{ count }}</p>
-    <button @click="increment">Increment</button>
+    <h1>{{ msg }}</h1>
+    <p>Count: {{ cnt }}</p>
+    <p v-if="cnt > 0" class="status">{{ getStatus }}</p>
+    <button @click="inc">Increment</button>
+    <button @click="res">Reset</button>
   </div>
 </template>
 
 <script>
-import { ref } from '@vue/composition-api'
+import { ref, computed } from '@vue/composition-api'
 
 export default {
   name: 'App',
   setup() {
-    const message = ref('Welcome to Vue 2.6 + Composition API')
-    const count = ref(0)
+    const msg = ref('Welcome to Vue 2.6 + Composition API')
+    const cnt = ref(0)
 
-    const increment = () => {
-      count.value++
+    const getStatus = computed(() => {
+      const val = cnt.value
+      if (val === 0) return ''
+      if (val >= 10) return 'Maximum reached!'
+      if (val >= 5) return 'Halfway there!'
+      return 'Keep going!'
+    })
+
+    function inc() {
+      if (cnt.value < 10) cnt.value++
     }
 
-    return {
-      message,
-      count,
-      increment
+    function res() {
+      if (cnt.value > 0) cnt.value = 0
     }
+
+    return { msg, cnt, getStatus, inc, res }
   }
 }
 </script>
@@ -46,9 +56,21 @@ button {
   color: white;
   border: none;
   border-radius: 4px;
+  margin: 0 5px;
 }
 
-button:hover {
+button:hover:not(:disabled) {
   background-color: #35a372;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.status {
+  font-weight: bold;
+  color: #42b983;
+  margin: 10px 0;
 }
 </style>
