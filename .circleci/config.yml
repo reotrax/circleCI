@@ -1,31 +1,84 @@
-# Use the latest 2.1 version of CircleCI pipeline process engine.
-# See: https://circleci.com/docs/reference/configuration-reference
 version: 2.1
 
-# Define a job to be invoked later in a workflow.
-# See: https://circleci.com/docs/guides/orchestrate/jobs-steps/#jobs-overview & https://circleci.com/docs/reference/configuration-reference/#jobs
+orbs:
+  node: circleci/node@5.1.0
+  github-cli: circleci/github-cli@2.3.0
+
 jobs:
-  say-hello:
-    # Specify the execution environment. You can specify an image from Docker Hub or use one of our convenience images from CircleCI's Developer Hub.
-    # See: https://circleci.com/docs/guides/execution-managed/executor-intro/ & https://circleci.com/docs/reference/configuration-reference/#executor-job
+  build-and-test:
     docker:
-      # Specify the version you desire here
-      # See: https://circleci.com/developer/images/image/cimg/base
-      - image: cimg/base:current
-
-    # Add steps to the job
-    # See: https://circleci.com/docs/guides/orchestrate/jobs-steps/#steps-overview & https://circleci.com/docs/reference/configuration-reference/#steps
+      - image: cimg/node:22.9.0
     steps:
-      # Checkout the code as the first step.
       - checkout
-      - run:
-          name: "Say hello"
-          command: "echo Hello, World!"
 
-# Orchestrate jobs using workflows
-# See: https://circleci.com/docs/guides/orchestrate/workflows/ & https://circleci.com/docs/reference/configuration-reference/#workflows
+      # 依存関係のキャッシュを復元
+      - restore_cache:
+          keys:
+            - v1-dependencies-{{ checksum "yarn.lock" }}
+            - v1-dependencies-
+
+      # 依存関係のインストール
+      - run:
+          name: Install dependencies
+          command: yarn install --frozen-lockfile
+
+      # 依存関係をキャッシュ
+      - save_cache:
+          paths:
+            - node_modules
+          key: v1-dependencies-{{ checksum "yarn.lock" }}
+
+      # リンター実行
+      - run:
+          name: Run linter
+          command: yarn lint
+
+      # ビルド実行
+      - run:
+          name: Build project
+          command: yarn build
+
+      # ビルド成果物を保存
+      - store_artifacts:
+          path: dist
+          destination: build-output
+
+      # ワークスペースに結果を保存（後続のジョブで使用）
+      - persist_to_workspace:
+          root: .
+          paths:
+            - dist
+
+  comment-on-pr:
+    docker:
+      - image: cimg/node:22.9.0
+    steps:
+      - checkout
+
+      # ワークスペースから結果を取得
+      - attach_workspace:
+          at: .
+
+      # GitHub CLIをセットアップ
+      - github-cli/setup
+
+      # GitHub認証の設定（OIDC → GITHUB_TOKEN のフォールバック）
+      - run:
+          name: Setup GitHub Authentication
+          command: .circleci/scripts/setup-github-auth.sh
+
+      # PRにコメントを投稿
+      - run:
+          name: Comment on PR
+          command: .circleci/scripts/comment-on-pr.sh
+
 workflows:
-  say-hello-workflow: # This is the name of the workflow, feel free to change it to better match your workflow.
-    # Inside the workflow, you define the jobs you want to run.
+  build-and-comment:
     jobs:
-      - say-hello
+      - build-and-test
+      - comment-on-pr:
+          requires:
+            - build-and-test
+          filters:
+            branches:
+              ignore: main
