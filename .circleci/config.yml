@@ -65,81 +65,12 @@ jobs:
       # GitHub認証の設定（OIDC → GITHUB_TOKEN のフォールバック）
       - run:
           name: Setup GitHub Authentication
-          command: |
-            echo "=== GitHub Authentication Setup ==="
-
-            # まずOIDC/GitHub App統合による認証を確認
-            if gh auth status > /dev/null 2>&1; then
-              echo "✅ Using OIDC/GitHub App Integration"
-              echo "Authentication method: CircleCI GitHub App (OIDC-based)"
-              AUTH_METHOD="OIDC"
-            else
-              echo "⚠️  OIDC authentication not available"
-
-              # GITHUB_TOKENが設定されているか確認
-              if [ -n "$GITHUB_TOKEN" ]; then
-                echo "✅ Using GITHUB_TOKEN from environment variables"
-                echo "$GITHUB_TOKEN" | gh auth login --with-token
-                echo "Authentication method: Personal Access Token (GITHUB_TOKEN)"
-                AUTH_METHOD="PAT"
-              else
-                echo "❌ ERROR: No authentication method available"
-                echo "Please set GITHUB_TOKEN in CircleCI project settings or enable GitHub App integration"
-                exit 1
-              fi
-            fi
-
-            # 認証状態を確認
-            echo ""
-            echo "=== Authentication Status ==="
-            gh auth status
-
-            # 使用した認証方法を環境変数として保存
-            echo "export AUTH_METHOD=$AUTH_METHOD" >> $BASH_ENV
+          command: .circleci/scripts/setup-github-auth.sh
 
       # PRにコメントを投稿
       - run:
           name: Comment on PR
-          command: |
-            # PRの場合のみ実行
-            if [ -n "$CIRCLE_PULL_REQUEST" ]; then
-              # PR番号を抽出
-              PR_NUMBER=$(echo $CIRCLE_PULL_REQUEST | sed 's/.*\/pull\///')
-
-              echo "=== Posting comment to PR #$PR_NUMBER ==="
-              echo "Authentication method used: $AUTH_METHOD"
-
-              # ビルド結果のサマリーを作成
-              COMMENT_BODY=$(cat \<<EOF
-            ## CircleCI Build Report
-
-            ✅ Build successful
-
-            **Build Details:**
-            - **Workflow:** $CIRCLE_WORKFLOW_ID
-            - **Job:** $CIRCLE_JOB
-            - **Build Number:** $CIRCLE_BUILD_NUM
-            - **Branch:** $CIRCLE_BRANCH
-            - **Auth Method:** $AUTH_METHOD
-
-            **Artifacts:**
-            - [View build artifacts]($CIRCLE_BUILD_URL/artifacts)
-
-            **Results:**
-            - ✅ Linting passed
-            - ✅ Build completed successfully
-
-            [View full build details]($CIRCLE_BUILD_URL)
-            EOF
-            )
-
-              # GitHub CLIを使用してコメントを投稿
-              echo "$COMMENT_BODY" | gh pr comment "$PR_NUMBER" --body-file -
-
-              echo "✅ Comment posted to PR #$PR_NUMBER using $AUTH_METHOD authentication"
-            else
-              echo "Not a pull request, skipping comment"
-            fi
+          command: .circleci/scripts/comment-on-pr.sh
 
 workflows:
   build-and-comment:
