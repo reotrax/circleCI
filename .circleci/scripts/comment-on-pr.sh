@@ -220,12 +220,15 @@ get_coverage_color() {
   DECREASED_FILES=""
   if [ -n "$PREV_COVERAGE" ]; then
     while IFS='|' read -r file s_curr b_curr f_curr l_curr; do
-      # ファイル名から相対パスを取得
-      rel_file=$(echo "$file" | sed "s|^$PROJECT_ROOT/||")
-      # 前回のカバレッジを取得
-      prev_data=$(echo "$PREV_COVERAGE" | jq ".$rel_file" 2>/dev/null)
+      # ファイル名から相対パスを取得し、正規化
+      rel_file=$(echo "$file" | sed "s|^$PROJECT_ROOT/||" | sed 's|//|/|g')
+      echo "  - 相対パス: $rel_file"
       
-      if [ "$prev_data" != "null" ] && [ -n "$prev_data" ]; then
+      # 前回のカバレッジを取得（エラーハンドリング付き）
+      prev_data=$(echo "$PREV_COVERAGE" | jq -c ".\"$rel_file\"" 2>/dev/null || echo "null")
+      echo "  - 前回データの取得結果: $([ "$prev_data" = "null" ] && echo "見つかりません" || echo "見つかりました")"
+      
+      if [ "$prev_data" != "null" ] && [ "$prev_data" != "" ]; then
         s_prev=$(echo "$prev_data" | jq -r '.statements.pct // 0' 2>/dev/null)
         b_prev=$(echo "$prev_data" | jq -r '.branches.pct // 0' 2>/dev/null)
         f_prev=$(echo "$prev_data" | jq -r '.functions.pct // 0' 2>/dev/null)
