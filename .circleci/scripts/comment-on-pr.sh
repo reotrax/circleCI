@@ -265,17 +265,14 @@ get_coverage_color() {
 ### カバレッジの傾向
 
 $(if [ -n "$PREV_COVERAGE" ] && [ "$PREV_COVERAGE" != '{"total":{"statements":{"total":0,"covered":0,"skipped":0,"pct":0},"branches":{"total":0,"covered":0,"skipped":0,"pct":0},"functions":{"total":0,"covered":0,"skipped":0,"pct":0},"lines":{"total":0,"covered":0,"skipped":0,"pct":0}}}' ]; then
-  echo "✅ 前回のカバレッジデータと比較しています";
 else
-  echo "ℹ️ 前回のカバレッジデータが見つからないか、初回実行のため比較できません";
+  echo "ℹ️ 前回のカバレッジデータが見つかりませんでした"
 fi)
 
 $(if [ -n "$DECREASED_FILES" ]; then
-  echo "## ⚠️ カバレッジが低下したファイル\n\n$DECREASED_FILES"
+  echo "### ⚠️ カバレッジが低下したファイル\n\n$DECREASED_FILES"
 else
-  if [ -n "$PREV_COVERAGE" ] && [ "$PREV_COVERAGE" != '{"total":{"statements":{"total":0,"covered":0,"skipped":0,"pct":0},"branches":{"total":0,"covered":0,"skipped":0,"pct":0},"functions":{"total":0,"covered":0,"skipped":0,"pct":0},"lines":{"total":0,"covered":0,"skipped":0,"pct":0}}}' ]; then
-    echo "✅ カバレッジの低下は検出されませんでした"
-  fi
+  echo "✅ カバレッジの低下は検出されませんでした"
 fi)
 
 <details>
@@ -283,20 +280,23 @@ fi)
 
 | ファイル | ステートメント | ブランチ | 関数 | 行 |
 |----------|----------------|----------|------|----|
-$(echo "$COVERAGE_DATA" | tail -n +2 | head -n 10 | awk -F'|' '{ printf "| %s | %s%% | %s%% | %s%% | %s%% |\n", $2, $3, $4, $5, $6 }')
-
+$(
+  echo "$COVERAGE_DATA" | tail -n +2 | head -n 10 | while IFS='|' read -r file s b f l; do
+    echo "| ${file##*/} | ${s}% | ${b}% | ${f}% | ${l}% |"
+  done
+)
 </details>
 
 <details>
 <summary>📦 カバレッジデータのサマリー (Raw JSON)</summary>
 
-\`\`\`json
-$(cat "$COVERAGE_FILE" | jq -c . 2>/dev/null || echo "{}")
-\`\`\`
+```json
+$(cat "${COVERAGE_FILE}" | jq -c .)
+```
 </details>
 
 *このコメントは自動的に投稿されました*  
-*Build: ${CIRCLE_BUILD_NUM:-N/A} | Workflow: ${CIRCLE_WORKFLOW_ID:-N/A}*
+*Build: ${CIRCLE_BUILD_NUM} | Workflow: ${CIRCLE_WORKFLOW_ID}*
 
 <details>
 <summary>🔍 デバッグ情報</summary>
@@ -306,23 +306,22 @@ $(env | sort)
 ```
 </details>
 EOM
-  ) > "${PROJECT_ROOT}/pr-comment.md"
   
   # コメントファイルの内容を確認
   echo "=== 生成されたコメントファイルの内容 ==="
   cat "${PROJECT_ROOT}/pr-comment.md"
   
   # コメントファイルのサイズを確認
-  echo "\nコメントファイルのサイズ: $(wc -c < "${PROJECT_ROOT}/pr-comment.md") バイト"
+  echo -e "\nコメントファイルのサイズ: $(wc -c < "${PROJECT_ROOT}/pr-comment.md") バイト"
 
-# コメントを表示
-echo "=== 生成されたコメント ==="
-cat "${PROJECT_ROOT}/pr-comment.md"
+  # コメントを表示
+  echo -e "\n=== 生成されたコメント ==="
+  cat "${PROJECT_ROOT}/pr-comment.md"
 
-# GitHub APIを使用してコメントを投稿
-echo "\n=== GitHub PRにコメントを投稿中 ==="
-COMMENT_URL="https://api.github.com/repos/${CIRCLE_PROJECT_USERNAME:-${CIRCLE_PROJECT_USERNAME:-}}/${CIRCLE_PROJECT_REPONAME:-${CIRCLE_PROJECT_REPONAME:-}}/issues/${PR_NUMBER}/comments"
-COMMENT_BODY=$(jq -n --arg body "$(cat "${PROJECT_ROOT}/pr-comment.md")" '{"body": $body}')
+  # GitHub APIを使用してコメントを投稿
+  echo -e "\n=== GitHub PRにコメントを投稿中 ==="
+  COMMENT_URL="https://api.github.com/repos/${CIRCLE_PROJECT_USERNAME:-$CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME:-$CIRCLE_PROJECT_REPONAME}/issues/${PR_NUMBER}/comments"
+  COMMENT_BODY=$(jq -n --arg body "$(cat "${PROJECT_ROOT}/pr-comment.md")" '{"body": $body}')
 
 # デバッグ用にURLとボディを表示
 echo "API URL: $COMMENT_URL"
