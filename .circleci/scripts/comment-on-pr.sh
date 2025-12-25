@@ -202,14 +202,14 @@ get_coverage_color() {
       echo "⚠️ 前回のカバレッジデータがありません"
     fi
 
-    # 差分の計算
-    local diff=$(echo "$current - $prev" | bc -l 2>/dev/null || echo "0")
+    # 差分の計算（bcの代わりにawkを使用）
+    local diff=$(awk -v c="$current" -v p="$prev" 'BEGIN {printf "%.1f", c - p}' 2>/dev/null || echo "0")
     echo "  - 差分: $diff"
     
     # 差分に基づいたアイコンとメッセージを返す
-    if (( $(echo "$diff > 0" | bc -l) )); then
+    if [ "$(awk -v d="$diff" 'BEGIN {print (d > 0) ? "true" : "false"}')" = "true" ]; then
       echo "🟢 +${diff}%"
-    elif (( $(echo "$diff < 0" | bc -l) )); then
+    elif [ "$(awk -v d="$diff" 'BEGIN {print (d < 0) ? "true" : "false"}')" = "true" ]; then
       echo "🔴 ${diff}%"
     else
       echo "➖ 0%"
@@ -234,8 +234,8 @@ get_coverage_color() {
         f_prev=$(echo "$prev_data" | jq -r '.functions.pct // 0' 2>/dev/null)
         l_prev=$(echo "$prev_data" | jq -r '.lines.pct // 0' 2>/dev/null)
         
-        # カバレッジが低下したかチェック
-        if (( $(echo "$s_curr < $s_prev || $b_curr < $b_prev || $f_curr < $f_prev || $l_curr < $l_prev" | bc -l) )); then
+        # カバレッジが低下したかチェック（bcの代わりにawkを使用）
+        if [ "$(awk -v s="$s_curr" -v sp="$s_prev" -v b="$b_curr" -v bp="$b_prev" -v f="$f_curr" -v fp="$f_prev" -v l="$l_curr" -v lp="$l_prev" 'BEGIN {if (s < sp || b < bp || f < fp || l < lp) print "true"; else print "false"}')" = "true" ]; then
           DECREASED_FILES+="- **${rel_file}**\n"
           DECREASED_FILES+="  - ステートメント: ${s_prev}% → ${s_curr}%\n"
           DECREASED_FILES+="  - ブランチ: ${b_prev}% → ${b_curr}%\n"
