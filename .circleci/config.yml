@@ -47,35 +47,40 @@ jobs:
       - run:
           name: Post test coverage to PR
           command: |
+            # デバッグ情報を表示
+            echo "=== デバッグ情報 ==="
+            echo "CIRCLE_PULL_REQUEST: ${CIRCLE_PULL_REQUEST:-未設定}"
+            echo "現在のディレクトリ: $(pwd)"
+            echo "環境変数:"
+            env | sort
+            
             if [ -n "$CIRCLE_PULL_REQUEST" ]; then
-              # カレントディレクトリを表示
-              echo "Current directory: $(pwd)"
-              echo "Script directory: $(dirname "$0")"
-              
-              # スクリプトのパスを相対パスで指定
+              # スクリプトのパスを設定
               SCRIPT_PATH=".circleci/scripts/comment-on-pr.sh"
               
               # スクリプトの存在確認
-              if [ -f "$SCRIPT_PATH" ]; then
-                echo "Found script at: $(pwd)/$SCRIPT_PATH"
-                chmod +x "$SCRIPT_PATH"
-                
-                # スクリプトを実行（カレントディレクトリを維持）
-                (cd "$(dirname "$SCRIPT_PATH")" && ./"$(basename "$SCRIPT_PATH")")
-                
-                # スクリプトの終了コードをチェック
-                if [ $? -ne 0 ]; then
-                  echo "Error: Script execution failed"
-                  exit 1
-                fi
-              else
-                echo "Error: Script not found at $(pwd)/$SCRIPT_PATH"
-                echo "Current directory contents:"
+              if [ ! -f "$SCRIPT_PATH" ]; then
+                echo "❌ エラー: スクリプトが見つかりません: $SCRIPT_PATH"
+                echo "カレントディレクトリの内容:"
                 ls -la
-                echo "Scripts directory contents:"
-                ls -la .circleci/scripts/ || echo "Cannot list scripts directory"
+                echo "scripts ディレクトリの内容:"
+                ls -la .circleci/scripts/ 2>/dev/null || echo "scripts ディレクトリが見つかりません"
                 exit 1
               fi
+              
+              # スクリプトに実行権限を付与
+              chmod +x "$SCRIPT_PATH"
+              
+              # スクリプトを実行
+              echo "スクリプトを実行中: $SCRIPT_PATH"
+              if ! "$SCRIPT_PATH"; then
+                echo "❌ エラー: スクリプトの実行に失敗しました"
+                exit 1
+              fi
+              
+              echo "✅ スクリプトが正常に完了しました"
+            else
+              echo "PRではないため、カバレッジコメントはスキップされます"
             fi
 
       # ビルド実行
