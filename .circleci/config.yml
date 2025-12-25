@@ -33,6 +33,56 @@ jobs:
           name: Run linter
           command: yarn lint
 
+      # テスト実行
+      - run:
+          name: Run tests with coverage
+          command: yarn test:coverage
+
+      # カバレッジレポートを保存
+      - store_artifacts:
+          path: coverage
+          destination: coverage-report
+
+      # PRにコメントを投稿
+      - run:
+          name: Post test coverage to PR
+          command: |
+            # デバッグ情報を表示
+            echo "=== デバッグ情報 ==="
+            echo "CIRCLE_PULL_REQUEST: ${CIRCLE_PULL_REQUEST:-未設定}"
+            echo "現在のディレクトリ: $(pwd)"
+            echo "環境変数:"
+            env | sort
+            
+            if [ -n "$CIRCLE_PULL_REQUEST" ]; then
+              # スクリプトのパスを設定
+              SCRIPT_PATH=".circleci/scripts/comment-on-pr.sh"
+              
+              # スクリプトの存在確認
+              if [ ! -f "$SCRIPT_PATH" ]; then
+                echo "❌ エラー: スクリプトが見つかりません: $SCRIPT_PATH"
+                echo "カレントディレクトリの内容:"
+                ls -la
+                echo "scripts ディレクトリの内容:"
+                ls -la .circleci/scripts/ 2>/dev/null || echo "scripts ディレクトリが見つかりません"
+                exit 1
+              fi
+              
+              # スクリプトに実行権限を付与
+              chmod +x "$SCRIPT_PATH"
+              
+              # スクリプトを実行
+              echo "スクリプトを実行中: $SCRIPT_PATH"
+              if ! "$SCRIPT_PATH"; then
+                echo "❌ エラー: スクリプトの実行に失敗しました"
+                exit 1
+              fi
+              
+              echo "✅ スクリプトが正常に完了しました"
+            else
+              echo "PRではないため、カバレッジコメントはスキップされます"
+            fi
+
       # ビルド実行
       - run:
           name: Build project
@@ -48,6 +98,7 @@ jobs:
           root: .
           paths:
             - dist
+            - coverage
 
   comment-on-pr:
     docker:
