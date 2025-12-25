@@ -11,7 +11,8 @@ trap 'handle_error $LINENO' ERR
 
 # スクリプトのディレクトリを取得
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+# プロジェクトルートを正しく設定（.circleciの1つ上のディレクトリ）
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 # デバッグ情報を表示
 echo "=== デバッグ情報 ==="
@@ -42,16 +43,37 @@ if [ -z "${GITHUB_TOKEN:-}" ]; then
   exit 1
 fi
 
-# カバレッジファイルのパス
-COVERAGE_FILE="${PROJECT_ROOT}/coverage/coverage-summary.json"
+# カバレッジファイルのパスを検索
+COVERAGE_FILE=""
+POSSIBLE_PATHS=(
+  "${PROJECT_ROOT}/coverage/coverage-summary.json"
+  "${PROJECT_ROOT}/coverage/lcov-report/coverage-summary.json"
+  "${PROJECT_ROOT}/coverage/coverage-final.json"
+)
 
-# カバレッジ情報を読み込む
-if [ ! -f "$COVERAGE_FILE" ]; then
-  echo "❌ エラー: カバレッジファイルが見つかりません: $COVERAGE_FILE"
-  echo "カレントディレクトリの内容:"
-  ls -la "$(dirname "$COVERAGE_FILE")" 2>/dev/null || echo "ディレクトリにアクセスできません"
+# カバレッジファイルを探す
+for path in "${POSSIBLE_PATHS[@]}"; do
+  if [ -f "$path" ]; then
+    COVERAGE_FILE="$path"
+    break
+  fi
+done
+
+# カバレッジファイルが見つからない場合
+if [ -z "$COVERAGE_FILE" ]; then
+  echo "❌ エラー: カバレッジファイルが見つかりません。以下の場所を確認しました:"
+  for path in "${POSSIBLE_PATHS[@]}"; do
+    echo "  - $path"
+  done
+  echo "\nプロジェクトルート: $PROJECT_ROOT"
+  echo "\nプロジェクトルートの内容:"
+  ls -la "$PROJECT_ROOT"
+  echo "\ncoverage ディレクトリの内容:"
+  ls -la "${PROJECT_ROOT}/coverage/" 2>/dev/null || echo "  coverage ディレクトリが見つかりません"
   exit 1
 fi
+
+echo "✅ カバレッジファイルを見つけました: $COVERAGE_FILE"
 
 echo "=== カバレッジ情報を読み込み中 ==="
 echo "カバレッジファイル: $COVERAGE_FILE"
