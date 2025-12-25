@@ -1,38 +1,62 @@
 #!/bin/bash
 set -e
 
+# スクリプトのディレクトリを取得
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+
+# デバッグ情報を表示
+echo "=== デバッグ情報 ==="
+echo "スクリプトの場所: $SCRIPT_DIR"
+echo "プロジェクトルート: $PROJECT_ROOT"
+echo "カレントディレクトリ: $(pwd)"
+
 # PRの場合のみ実行
 if [ -n "$CIRCLE_PULL_REQUEST" ]; then
   # PR番号を抽出
-  PR_NUMBER=$(echo $CIRCLE_PULL_REQUEST | sed 's/.*\/pull\///')
+  PR_NUMBER=$(echo $CIRCLE_PULL_REQUEST | sed 's/.*\/pull\//')
 
   echo "=== PR #$PR_NUMBER にコメントを投稿中 ==="
   echo "認証方法: $AUTH_METHOD"
 
+  # カバレッジファイルのパス
+  COVERAGE_FILE="${PROJECT_ROOT}/coverage/coverage-summary.json"
+  
   # カバレッジ情報を読み込む
-  if [ -f "coverage/coverage-summary.json" ]; then
+  if [ -f "$COVERAGE_FILE" ]; then
     echo "=== カバレッジ情報を読み込み中 ==="
+    echo "カバレッジファイル: $COVERAGE_FILE"
 
     # jqの存在チェック
     if ! command -v jq > /dev/null 2>&1; then
       echo "❌ エラー: カバレッジ解析にはjqが必要ですが、見つかりませんでした"
-      echo "CircleCI環境にjqがインストールされていることを確認してください"
+      echo "jq バージョン: $(jq --version 2>/dev/null || echo 'Not found')"
+      echo "パス: $(which jq 2>/dev/null || echo 'Not in PATH')"
       exit 1
     fi
 
-    # シェルスクリプトでカバレッジをパース（絶対パスを使用）
-    echo "jqでカバレッジを解析中..."
-    PARSER_PATH="/root/project/.circleci/scripts/parse-coverage.sh"
-    if [ -f "$PARSER_PATH" ]; then
-      chmod +x "$PARSER_PATH"
-      COVERAGE_DATA=$("$PARSER_PATH")
-    else
+    # パーサースクリプトのパス
+    PARSER_PATH="${SCRIPT_DIR}/parse-coverage.sh"
+    
+    # パーサースクリプトの存在確認
+    if [ ! -f "$PARSER_PATH" ]; then
       echo "❌ エラー: パーサースクリプトが見つかりません: $PARSER_PATH"
+      echo "スクリプトディレクトリの内容:"
+      ls -la "$SCRIPT_DIR/"
       exit 1
     fi
+
+    # パーサースクリプトを実行
+    echo "jqでカバレッジを解析中..."
+    chmod +x "$PARSER_PATH"
+    
+    # カレントディレクトリをプロジェクトルートに変更してから実行
+    cd "$PROJECT_ROOT"
+    COVERAGE_DATA=$("$PARSER_PATH")
 
     if [ -z "$COVERAGE_DATA" ]; then
       echo "❌ エラー: カバレッジデータの解析に失敗しました"
+      echo "パーサースクリプトの出力: $COVERAGE_DATA"
       exit 1
     fi
 

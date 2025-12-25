@@ -48,14 +48,32 @@ jobs:
           name: Post test coverage to PR
           command: |
             if [ -n "$CIRCLE_PULL_REQUEST" ]; then
-              # 絶対パスを使用
-              SCRIPT_PATH="/root/project/.circleci/scripts/comment-on-pr.sh"
+              # カレントディレクトリを表示
+              echo "Current directory: $(pwd)"
+              echo "Script directory: $(dirname "$0")"
+              
+              # スクリプトのパスを相対パスで指定
+              SCRIPT_PATH=".circleci/scripts/comment-on-pr.sh"
+              
+              # スクリプトの存在確認
               if [ -f "$SCRIPT_PATH" ]; then
+                echo "Found script at: $(pwd)/$SCRIPT_PATH"
                 chmod +x "$SCRIPT_PATH"
-                "$SCRIPT_PATH"
+                
+                # スクリプトを実行（カレントディレクトリを維持）
+                (cd "$(dirname "$SCRIPT_PATH")" && ./"$(basename "$SCRIPT_PATH")")
+                
+                # スクリプトの終了コードをチェック
+                if [ $? -ne 0 ]; then
+                  echo "Error: Script execution failed"
+                  exit 1
+                fi
               else
-                echo "Error: Script not found at $SCRIPT_PATH"
-                ls -la /root/project/.circleci/scripts/
+                echo "Error: Script not found at $(pwd)/$SCRIPT_PATH"
+                echo "Current directory contents:"
+                ls -la
+                echo "Scripts directory contents:"
+                ls -la .circleci/scripts/ || echo "Cannot list scripts directory"
                 exit 1
               fi
             fi
