@@ -6,35 +6,35 @@ if [ -n "$CIRCLE_PULL_REQUEST" ]; then
   # PR番号を抽出
   PR_NUMBER=$(echo $CIRCLE_PULL_REQUEST | sed 's/.*\/pull\///')
 
-  echo "=== Posting comment to PR #$PR_NUMBER ==="
-  echo "Authentication method used: $AUTH_METHOD"
+  echo "=== PR #$PR_NUMBER にコメントを投稿中 ==="
+  echo "認証方法: $AUTH_METHOD"
 
   # カバレッジ情報を読み込む
   if [ -f "coverage/coverage-summary.json" ]; then
-    echo "=== Reading coverage information ==="
+    echo "=== カバレッジ情報を読み込み中 ==="
 
     # Python3の存在チェック
     if ! command -v python3 > /dev/null 2>&1; then
-      echo "❌ ERROR: Python3 is required for coverage parsing but was not found"
-      echo "Please ensure Python3 is installed in your CircleCI environment"
+      echo "❌ エラー: カバレッジ解析にはPython3が必要ですが、見つかりませんでした"
+      echo "CircleCI環境にPython3がインストールされていることを確認してください"
       exit 1
     fi
 
     # Python3でカバレッジをパース
-    echo "Parsing coverage with Python3..."
+    echo "Python3でカバレッジを解析中..."
     COVERAGE_DATA=$(python3 .circleci/scripts/parse-coverage.py)
 
     if [ -z "$COVERAGE_DATA" ]; then
-      echo "❌ ERROR: Failed to parse coverage data"
+      echo "❌ エラー: カバレッジデータの解析に失敗しました"
       exit 1
     fi
 
-    echo "Coverage data parsed successfully"
+    echo "カバレッジデータの解析が完了しました"
 
     # Total coverage
     IFS='|' read -r TOTAL_STATEMENTS TOTAL_BRANCHES TOTAL_FUNCTIONS TOTAL_LINES <<< "$(echo "$COVERAGE_DATA" | head -1)"
 
-    echo "Total Coverage - Statements: $TOTAL_STATEMENTS%, Branches: $TOTAL_BRANCHES%, Functions: $TOTAL_FUNCTIONS%, Lines: $TOTAL_LINES%"
+    echo "全体カバレッジ - ステートメント: $TOTAL_STATEMENTS%, ブランチ: $TOTAL_BRANCHES%, 関数: $TOTAL_FUNCTIONS%, 行数: $TOTAL_LINES%"
 
     # ファイルごとのカバレッジ詳細
     COVERAGE_DETAILS=""
@@ -49,9 +49,9 @@ if [ -n "$CIRCLE_PULL_REQUEST" ]; then
     PARSE_DETAILS=$(cat <<EOF
 
 <details>
-<summary>📋 Coverage Data (Click to expand)</summary>
+<summary>📋 カバレッジデータ (クリックで展開)</summary>
 
-**Raw Coverage Data:**
+**生のカバレッジデータ:**
 \`\`\`
 ${COVERAGE_DATA}
 \`\`\`
@@ -65,21 +65,21 @@ EOF
 
     COVERAGE_SECTION=$(cat <<EOF
 
-## 📊 Test Coverage Report (C1 - Statement Coverage)
+## 📊 テストカバレッジレポート
 
-### Overall Coverage
-| Metric | Coverage |
+### 全体カバレッジ
+| メトリクス | カバレッジ |
 |--------|----------|
-| **Statements** | ${TOTAL_STATEMENTS}% |
-| **Branches** | ${TOTAL_BRANCHES}% |
-| **Functions** | ${TOTAL_FUNCTIONS}% |
-| **Lines** | ${TOTAL_LINES}% |
+| **ステートメント** | ${TOTAL_STATEMENTS}% |
+| **ブランチ** | ${TOTAL_BRANCHES}% |
+| **関数** | ${TOTAL_FUNCTIONS}% |
+| **行数** | ${TOTAL_LINES}% |
 
-### Coverage by File
-| File | Statements | Branches | Functions | Lines |
+### ファイル別カバレッジ
+| ファイル | ステートメント | ブランチ | 関数 | 行数 |
 |------|------------|----------|-----------|-------|
 ${COVERAGE_DETAILS}
-[📁 View detailed HTML coverage report](${ARTIFACTS_URL})
+[📁 詳細なHTMLカバレッジレポートを表示](${ARTIFACTS_URL})
 ${PARSE_DETAILS}
 EOF
 )
@@ -89,31 +89,31 @@ EOF
 
   # ビルド結果のサマリーを作成
   COMMENT_BODY=$(cat <<EOF
-## CircleCI Build Report
+## CircleCI ビルド結果
 
-✅ Build successful
+✅ ビルドが成功しました
 
-**Build Details:**
-- **Workflow:** $CIRCLE_WORKFLOW_ID
-- **Job:** $CIRCLE_JOB
-- **Build Number:** $CIRCLE_BUILD_NUM
-- **Branch:** $CIRCLE_BRANCH
-- **Auth Method:** $AUTH_METHOD
+**ビルド詳細:**
+- **ワークフロー:** $CIRCLE_WORKFLOW_ID
+- **ジョブ:** $CIRCLE_JOB
+- **ビルド番号:** $CIRCLE_BUILD_NUM
+- **ブランチ:** $CIRCLE_BRANCH
+- **認証方法:** $AUTH_METHOD
 
-**Results:**
-- ✅ Linting passed
-- ✅ Tests passed
-- ✅ Build completed successfully
+**結果:**
+- ✅ リンターが成功しました
+- ✅ テストが成功しました
+- ✅ ビルドが正常に完了しました
 ${COVERAGE_SECTION}
 
-[View full build details]($CIRCLE_BUILD_URL)
+[ビルドの詳細を確認する]($CIRCLE_BUILD_URL)
 EOF
 )
 
   # GitHub CLIを使用してコメントを投稿
   echo "$COMMENT_BODY" | gh pr comment "$PR_NUMBER" --body-file -
 
-  echo "✅ Comment posted to PR #$PR_NUMBER using $AUTH_METHOD authentication"
+  echo "✅ PR #$PR_NUMBER にコメントを投稿しました（認証方法: $AUTH_METHOD）"
 else
-  echo "Not a pull request, skipping comment"
+  echo "プルリクエストではないため、コメントをスキップします"
 fi
