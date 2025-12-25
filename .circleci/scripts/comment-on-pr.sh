@@ -417,5 +417,3 @@ EOM
     echo "PR_NUMBER: ${PR_NUMBER:-[未設定]}"
     exit 0
   fi
-}
-
