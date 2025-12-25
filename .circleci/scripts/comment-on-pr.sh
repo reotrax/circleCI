@@ -214,7 +214,6 @@ get_coverage_color() {
     else
       echo "➖ 0%"
     fi
-    fi
   }
 
   # カバレッジが低下したファイルを検出
