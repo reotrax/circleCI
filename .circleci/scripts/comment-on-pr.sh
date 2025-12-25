@@ -137,24 +137,122 @@ fi
     echo "https://img.shields.io/badge/${label// /_}-${value}%25-${color:1}.svg"
   }
   
+  # 前回のカバレッジデータを取得（存在する場合）
+  PREV_COVERAGE_FILE="${PROJECT_ROOT}/coverage/previous-coverage-summary.json"
+  PREV_COVERAGE=""
+  if [ -f "$PREV_COVERAGE_FILE" ]; then
+    PREV_COVERAGE=$(jq -c . "$PREV_COVERAGE_FILE" 2>/dev/null || echo "")
+  fi
+
+  # カバレッジの差分を計算する関数
+  get_coverage_diff() {
+    local current=$1
+    local metric=$2
+    if [ -n "$PREV_COVERAGE" ]; then
+      local prev=$(echo "$PREV_COVERAGE" | jq -r ".$metric.pct" 2>/dev/null || echo "0")
+      local diff=$(echo "$current - $prev" | bc -l 2>/dev/null || echo "0")
+      if (( $(echo "$diff > 0" | bc -l) )); then
+        echo "🟢 +${diff}%"
+      elif (( $(echo "$diff < 0" | bc -l) )); then
+        echo "🔴 ${diff}%"
+      else
+        echo "➖ 0%"
+      fi
+    else
+      echo "N/A"
+    fi
+  }
+
+  # カバレッジが低下したファイルを検出
+  DECREASED_FILES=""
+  if [ -n "$PREV_COVERAGE" ]; then
+    while IFS='|' read -r file s_curr b_curr f_curr l_curr; do
+      # ファイル名から相対パスを取得
+      rel_file=$(echo "$file" | sed "s|^$PROJECT_ROOT/||")
+      # 前回のカバレッジを取得
+      prev_data=$(echo "$PREV_COVERAGE" | jq ".$rel_file" 2>/dev/null)
+      
+      if [ "$prev_data" != "null" ] && [ -n "$prev_data" ]; then
+        s_prev=$(echo "$prev_data" | jq -r '.statements.pct // 0' 2>/dev/null)
+        b_prev=$(echo "$prev_data" | jq -r '.branches.pct // 0' 2>/dev/null)
+        f_prev=$(echo "$prev_data" | jq -r '.functions.pct // 0' 2>/dev/null)
+        l_prev=$(echo "$prev_data" | jq -r '.lines.pct // 0' 2>/dev/null)
+        
+        # カバレッジが低下したかチェック
+        if (( $(echo "$s_curr < $s_prev || $b_curr < $b_prev || $f_curr < $f_prev || $l_curr < $l_prev" | bc -l) )); then
+          DECREASED_FILES+="- **${rel_file}**\n"
+          DECREASED_FILES+="  - ステートメント: ${s_prev}% → ${s_curr}%\n"
+          DECREASED_FILES+="  - ブランチ: ${b_prev}% → ${b_curr}%\n"
+          DECREASED_FILES+="  - 関数: ${f_prev}% → ${f_curr}%\n"
+          DECREASED_FILES+="  - 行: ${l_prev}% → ${l_curr}%\n\n"
+        fi
+      fi
+    done < <(echo "$COVERAGE_DATA" | tail -n +2)
+  fi
+
+  # カバレッジサマリーを取得
+  COVERAGE_SUMMARY=$(jq -c . "$COVERAGE_FILE" 2>/dev/null || echo "{}")
+  
   # コメント本文を生成
   cat << EOM
-## 📊 テストカバレッジレポート
+## 🧪 Jest テスト結果
 
-| カテゴリ | カバレッジ | バッジ |
-|----------|------------|--------|
-| ステートメント | ${statements}% | ![]($(get_badge "Statements" "$statements")) |
-| ブランチ | ${branches}% | ![]($(get_badge "Branches" "$branches")) |
-| 関数 | ${functions}% | ![]($(get_badge "Functions" "$functions")) |
-| 行 | ${lines}% | ![]($(get_badge "Lines" "$lines")) |
+### カバレッジサマリー
+
+| カテゴリ | 現在のカバレッジ | 前回からの差分 | バッジ |
+|----------|------------------|----------------|--------|
+| ステートメント | ${statements}% | $(get_coverage_diff "$statements" "total.statements") | ![]($(get_badge "Statements" "$statements")) |
+| ブランチ | ${branches}% | $(get_coverage_diff "$branches" "total.branches") | ![]($(get_badge "Branches" "$branches")) |
+| 関数 | ${functions}% | $(get_coverage_diff "$functions" "total.functions") | ![]($(get_badge "Functions" "$functions")) |
+| 行 | ${lines}% | $(get_coverage_diff "$lines" "total.lines") | ![]($(get_badge "Lines" "$lines")) |
+
+### カバレッジの傾向
+
+$(if [ -n "$PREV_COVERAGE" ]; then
+  echo "✅ 前回のカバレッジデータと比較しています";
+else
+  echo "ℹ️ 前回のカバレッジデータが見つかりません";
+fi)
+
+$(if [ -n "$DECREASED_FILES" ]; then
+  echo "## ⚠️ カバレッジが低下したファイル\n\n$DECREASED_FILES"
+else
+  if [ -n "$PREV_COVERAGE" ]; then
+    echo "✅ カバレッジの低下は検出されませんでした"
+  fi
+fi)
 
 <details>
-<summary>📝 ファイルごとの詳細</summary>
+<summary>� ファイルごとの詳細（上位10件）</summary>
 
 | ファイル | ステートメント | ブランチ | 関数 | 行 |
 |----------|----------------|----------|------|----|
-$(echo "$COVERAGE_DATA" | tail -n +2 | awk -F'|' '{ printf "| %s | %s%% | %s%% | %s%% | %s%% |\n", $2, $3, $4, $5, $6 }' | sort -t'|' -k3,3nr)
+$(echo "$COVERAGE_DATA" | tail -n +2 | head -n 10 | awk -F'|' '{ printf "| %s | %s%% | %s%% | %s%% | %s%% |\n", $2, $3, $4, $5, $6 }')
 
+</details>
+
+<details>
+<summary>📦 カバレッジデータのサマリー</summary>
+
+\`\`\`json
+$(jq -c '{
+  total: {
+    statements: .total.statements,
+    branches: .total.branches,
+    functions: .total.functions,
+    lines: .total.lines
+  },
+  files: [. | to_entries[] | select(.key != "total") | {
+    file: .key,
+    coverage: {
+      statements: .value.statements,
+      branches: .value.branches,
+      functions: .value.functions,
+      lines: .value.lines
+    }
+  }]
+}' "$COVERAGE_FILE" 2>/dev/null || echo "{}")
+\`\`\`
 </details>
 
 *このコメントは自動的に投稿されました*  
