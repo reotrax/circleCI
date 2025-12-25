@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# デバッグ情報を表示
+echo "=== スクリプト開始 ==="
+set -x
+
 # jq のインストールチェックとインストール
 if ! command -v jq &> /dev/null; then
     echo "jq がインストールされていません。インストールを試みます..."
@@ -303,7 +307,7 @@ get_coverage_color() {
   )
 
   # コメントファイルに書き込み
-  cat > "${PROJECT_ROOT}/pr-comment.md" << EOM
+  cat > "${PROJECT_ROOT}/pr-comment.md" << 'EOM'
 ## 🧪 Jest テスト結果
 
 ### カバレッジサマリー
@@ -356,6 +360,50 @@ EOM
 
   # コメント本文を変数に読み込む
   COMMENT_BODY=$(cat "${PROJECT_ROOT}/pr-comment.md")
+  
+  # コメントを投稿する関数
+  post_comment() {
+    local comment_body="$1"
+    local api_url="https://api.github.com/repos/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}/issues/${PR_NUMBER}/comments"
+    
+    echo "=== GitHub PRにコメントを投稿中 ==="
+    echo "API URL: $api_url"
+    echo "コメントボディの長さ: ${#comment_body} 文字"
+    
+    # 一時ファイルを作成
+    local temp_file
+    temp_file=$(mktemp)
+    jq -n --arg body "$comment_body" '{body: $body}' > "$temp_file"
+    
+    # デバッグ用にJSONを表示
+    echo -e "\n=== デバッグ: コメント本文（投稿前） ==="
+    cat "$temp_file"
+    
+    # curlでリクエストを送信
+    echo -e "\n=== コメントを投稿中... ==="
+    local response
+    response=$(curl -s -S -X POST \
+        -H "Authorization: token $GITHUB_TOKEN" \
+        -H "Accept: application/vnd.github.v3+json" \
+        -H "Content-Type: application/json" \
+        -d "@$temp_file" \
+        "$api_url" 2>&1)
+    
+    local exit_code=$?
+    
+    # 一時ファイルを削除
+    rm -f "$temp_file"
+    
+    if [ $exit_code -eq 0 ]; then
+        echo "✅ コメントを投稿しました"
+        return 0
+    else
+        echo "❌ コメントの投稿に失敗しました"
+        echo "終了コード: $exit_code"
+        echo "エラー詳細: $response"
+        return 1
+    fi
+  }
   
   # GitHubにコメントを投稿する関数を呼び出す
   if [ -n "$GITHUB_TOKEN" ] && [ -n "$PR_NUMBER" ]; then
