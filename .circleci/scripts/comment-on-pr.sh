@@ -103,23 +103,36 @@ cd "$PROJECT_ROOT"
 
 # カバレッジデータを解析
 echo "📊 カバレッジデータを解析中..."
-COVERAGE_DATA=$("$PARSER_PATH" "$COVERAGE_FILE")
+# パーサースクリプトの実行をデバッグ
+set -x
+COVERAGE_DATA=$("$PARSER_PATH" "$COVERAGE_FILE" 2>&1)
+PARSER_EXIT_CODE=$?
+set +x
 
-if [ -z "$COVERAGE_DATA" ]; then
-  echo "❌ エラー: カバレッジデータの解析に失敗しました"
+if [ $PARSER_EXIT_CODE -ne 0 ] || [ -z "$COVERAGE_DATA" ]; then
+  echo "❌ エラー: カバレッジデータの解析に失敗しました (終了コード: $PARSER_EXIT_CODE)"
+  echo "=== パーサー出力開始 ==="
+  echo "$COVERAGE_DATA"
+  echo "=== パーサー出力終了 ==="
+  
+  # カバレッジファイルの内容を表示（デバッグ用）
+  echo "\n=== カバレッジファイルの先頭100行 ==="
+  head -n 100 "$COVERAGE_FILE"
+  echo "\n=== カバレッジファイルの最終10行 ==="
+  tail -n 10 "$COVERAGE_FILE"
+  
   exit 1
 fi
 
 # カバレッジデータをパース
-{
-  IFS='|' read -r statements branches functions lines <<< "$(echo "$COVERAGE_DATA" | head -n 1)"
+echo "=== カバレッジデータのパースを開始します ==="
+echo "Raw COVERAGE_DATA first line: $(echo "$COVERAGE_DATA" | head -n 1)"
   
-  # カバレッジの閾値（必要に応じて調整）
-  MIN_COVERAGE=80
+# カバレッジデータの最初の行を処理
+IFS='|' read -r statements branches functions lines <<< "$(echo "$COVERAGE_DATA" | head -n 1)"
   
-  # カバレッジの色を決定（赤: < 80%, 黄: 80-89%, 緑: 90%+）
-  get_coverage_color() {
-    local coverage=$(printf "%.0f" "$1")
+# デバッグ用に各変数の値を表示
+echo "Parsed values - statements: $statements, branches: $branches, functions: $functions, lines: $lines"
     if [ "$coverage" -lt 80 ]; then
       echo "#e05d44"  # 赤
     elif [ "$coverage" -lt 90 ]; then
@@ -252,8 +265,23 @@ $(cat "$COVERAGE_FILE" | jq -c . 2>/dev/null || echo "{}")
 
 *このコメントは自動的に投稿されました*  
 *Build: ${CIRCLE_BUILD_NUM:-N/A} | Workflow: ${CIRCLE_WORKFLOW_ID:-N/A}*
+
+<details>
+<summary>🔍 デバッグ情報</summary>
+
+```
+$(env | sort)
+```
+</details>
 EOM
-} > "${PROJECT_ROOT}/pr-comment.md"
+  ) > "${PROJECT_ROOT}/pr-comment.md"
+  
+  # コメントファイルの内容を確認
+  echo "=== 生成されたコメントファイルの内容 ==="
+  cat "${PROJECT_ROOT}/pr-comment.md"
+  
+  # コメントファイルのサイズを確認
+  echo "\nコメントファイルのサイズ: $(wc -c < "${PROJECT_ROOT}/pr-comment.md") バイト"
 
 # コメントを表示
 echo "=== 生成されたコメント ==="
