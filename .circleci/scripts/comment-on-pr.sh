@@ -193,24 +193,27 @@ get_coverage_color() {
     echo "  - 現在の値: $current"
     echo "  - メトリクス: $metric"
     
+    local prev="0"
     if [ -n "$PREV_COVERAGE" ]; then
       echo "  - 前回のカバレッジデータを検出しました"
-      local prev=$(echo "$PREV_COVERAGE" | jq -r ".$metric.pct" 2>/dev/null || echo "0")
+      prev=$(echo "$PREV_COVERAGE" | jq -r ".$metric.pct" 2>/dev/null || echo "0")
       echo "  - 前回の値: $prev"
     else
       echo "⚠️ 前回のカバレッジデータがありません"
-      local prev="0"
     fi
-      local diff=$(echo "$current - $prev" | bc -l 2>/dev/null || echo "0")
-      if (( $(echo "$diff > 0" | bc -l) )); then
-        echo "🟢 +${diff}%"
-      elif (( $(echo "$diff < 0" | bc -l) )); then
-        echo "🔴 ${diff}%"
-      else
-        echo "➖ 0%"
-      fi
+
+    # 差分の計算
+    local diff=$(echo "$current - $prev" | bc -l 2>/dev/null || echo "0")
+    echo "  - 差分: $diff"
+    
+    # 差分に基づいたアイコンとメッセージを返す
+    if (( $(echo "$diff > 0" | bc -l) )); then
+      echo "🟢 +${diff}%"
+    elif (( $(echo "$diff < 0" | bc -l) )); then
+      echo "🔴 ${diff}%"
     else
-      echo "N/A"
+      echo "➖ 0%"
+    fi
     fi
   }
 
