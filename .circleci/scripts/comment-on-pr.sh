@@ -331,8 +331,13 @@ echo "コメントボディの長さ: ${#COMMENT_BODY} 文字"
 # コメントを投稿
 RESPONSE=$(curl -sS -X POST \
   -H "Authorization: token $GITHUB_TOKEN" \
-  -H "Accept: application/vnd.github.v3+json" \
-  -d "$COMMENT_BODY" \
+  -H "Accept: application/vnd.github.v3+json"  # コメントをPRに投稿（デバッグ中は出力のみ）
+  echo "=== デバッグ: コメント本文（投稿前） ==="
+  echo -e "$COMMENT_BODY"
+  
+  # デバッグ中はコメントを投稿しない
+  echo "=== デバッグ: コメントの投稿をスキップします ==="
+  exit 0 \
   "$COMMENT_URL" 2>&1) || {
   echo "❌ コメントの投稿に失敗しました"
   echo "エラー詳細: $RESPONSE"
