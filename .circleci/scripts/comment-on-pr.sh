@@ -139,9 +139,20 @@ fi
   
   # 前回のカバレッジデータを取得（存在する場合）
   PREV_COVERAGE_FILE="${PROJECT_ROOT}/coverage/previous-coverage-summary.json"
+  PREV_COVERAGE_ARTIFACT="${PROJECT_ROOT}/coverage/coverage-summary.json"
   PREV_COVERAGE=""
+  
+  echo "=== 前回のカバレッジデータを検索中 ==="
   if [ -f "$PREV_COVERAGE_FILE" ]; then
-    PREV_COVERAGE=$(jq -c . "$PREV_COVERAGE_FILE" 2>/dev/null || echo "")
+    echo "✅ 前回のカバレッジデータを検出しました: $PREV_COVERAGE_FILE"
+    PREV_COVERAGE=$(cat "$PREV_COVERAGE_FILE" 2>/dev/null || echo "")
+  elif [ -f "$PREV_COVERAGE_ARTIFACT" ]; then
+    echo "ℹ️ アーティファクトからカバレッジデータを検出しました"
+    PREV_COVERAGE=$(cat "$PREV_COVERAGE_ARTIFACT" 2>/dev/null || echo "")
+  else
+    echo "ℹ️ 前回のカバレッジデータが見つかりません。初回実行の可能性があります。"
+    # 空のカバレッジデータを作成
+    PREV_COVERAGE='{"total":{"statements":{"total":0,"covered":0,"skipped":0,"pct":0},"branches":{"total":0,"covered":0,"skipped":0,"pct":0},"functions":{"total":0,"covered":0,"skipped":0,"pct":0},"lines":{"total":0,"covered":0,"skipped":0,"pct":0}}}'
   fi
 
   # カバレッジの差分を計算する関数
@@ -190,8 +201,8 @@ fi
     done < <(echo "$COVERAGE_DATA" | tail -n +2)
   fi
 
-  # カバレッジサマリーを取得
-  COVERAGE_SUMMARY=$(jq -c . "$COVERAGE_FILE" 2>/dev/null || echo "{}")
+  # 現在のカバレッジデータを取得
+  CURRENT_COVERAGE=$(cat "$COVERAGE_FILE" 2>/dev/null || echo "{}")
   
   # コメント本文を生成
   cat << EOM
@@ -208,22 +219,22 @@ fi
 
 ### カバレッジの傾向
 
-$(if [ -n "$PREV_COVERAGE" ]; then
+$(if [ -n "$PREV_COVERAGE" ] && [ "$PREV_COVERAGE" != '{"total":{"statements":{"total":0,"covered":0,"skipped":0,"pct":0},"branches":{"total":0,"covered":0,"skipped":0,"pct":0},"functions":{"total":0,"covered":0,"skipped":0,"pct":0},"lines":{"total":0,"covered":0,"skipped":0,"pct":0}}}' ]; then
   echo "✅ 前回のカバレッジデータと比較しています";
 else
-  echo "ℹ️ 前回のカバレッジデータが見つかりません";
+  echo "ℹ️ 前回のカバレッジデータが見つからないか、初回実行のため比較できません";
 fi)
 
 $(if [ -n "$DECREASED_FILES" ]; then
   echo "## ⚠️ カバレッジが低下したファイル\n\n$DECREASED_FILES"
 else
-  if [ -n "$PREV_COVERAGE" ]; then
+  if [ -n "$PREV_COVERAGE" ] && [ "$PREV_COVERAGE" != '{"total":{"statements":{"total":0,"covered":0,"skipped":0,"pct":0},"branches":{"total":0,"covered":0,"skipped":0,"pct":0},"functions":{"total":0,"covered":0,"skipped":0,"pct":0},"lines":{"total":0,"covered":0,"skipped":0,"pct":0}}}' ]; then
     echo "✅ カバレッジの低下は検出されませんでした"
   fi
 fi)
 
 <details>
-<summary>� ファイルごとの詳細（上位10件）</summary>
+<summary>📊 ファイルごとの詳細（上位10件）</summary>
 
 | ファイル | ステートメント | ブランチ | 関数 | 行 |
 |----------|----------------|----------|------|----|
@@ -232,26 +243,10 @@ $(echo "$COVERAGE_DATA" | tail -n +2 | head -n 10 | awk -F'|' '{ printf "| %s | 
 </details>
 
 <details>
-<summary>📦 カバレッジデータのサマリー</summary>
+<summary>📦 カバレッジデータのサマリー (Raw JSON)</summary>
 
 \`\`\`json
-$(jq -c '{
-  total: {
-    statements: .total.statements,
-    branches: .total.branches,
-    functions: .total.functions,
-    lines: .total.lines
-  },
-  files: [. | to_entries[] | select(.key != "total") | {
-    file: .key,
-    coverage: {
-      statements: .value.statements,
-      branches: .value.branches,
-      functions: .value.functions,
-      lines: .value.lines
-    }
-  }]
-}' "$COVERAGE_FILE" 2>/dev/null || echo "{}")
+$(cat "$COVERAGE_FILE" | jq -c . 2>/dev/null || echo "{}")
 \`\`\`
 </details>
 
