@@ -160,15 +160,28 @@ get_coverage_color() {
   PREV_COVERAGE=""
   
   echo "=== 前回のカバレッジデータを検索中 ==="
+  echo "🔍 検索パス1: $PREV_COVERAGE_FILE"
+  echo "🔍 検索パス2: $PREV_COVERAGE_ARTIFACT"
+  
   if [ -f "$PREV_COVERAGE_FILE" ]; then
     echo "✅ 前回のカバレッジデータを検出しました: $PREV_COVERAGE_FILE"
     PREV_COVERAGE=$(cat "$PREV_COVERAGE_FILE" 2>/dev/null || echo "")
+    echo "📄 前回のカバレッジデータのサイズ: ${#PREV_COVERAGE} バイト"
   elif [ -f "$PREV_COVERAGE_ARTIFACT" ]; then
     echo "ℹ️ アーティファクトからカバレッジデータを検出しました"
+    echo "📊 アーティファクトの内容（先頭50文字）: $(head -c 50 "$PREV_COVERAGE_ARTIFACT")..."
     PREV_COVERAGE=$(cat "$PREV_COVERAGE_ARTIFACT" 2>/dev/null || echo "")
+    echo "📄 アーティファクトデータのサイズ: ${#PREV_COVERAGE} バイト"
   else
     echo "ℹ️ 前回のカバレッジデータが見つかりません。初回実行の可能性があります。"
     # 空のカバレッジデータを作成
+    PREV_COVERAGE='{"total":{"statements":{"total":0,"covered":0,"skipped":0,"pct":0},"branches":{"total":0,"covered":0,"skipped":0,"pct":0},"functions":{"total":0,"covered":0,"skipped":0,"pct":0},"lines":{"total":0,"covered":0,"skipped":0,"pct":0}}}'
+    echo "🔄 空のカバレッジデータを初期化しました"
+  fi
+  
+  # カバレッジデータの検証
+  if [ -z "$PREV_COVERAGE" ]; then
+    echo "⚠️ 警告: カバレッジデータが空です。空のデータで続行します。"
     PREV_COVERAGE='{"total":{"statements":{"total":0,"covered":0,"skipped":0,"pct":0},"branches":{"total":0,"covered":0,"skipped":0,"pct":0},"functions":{"total":0,"covered":0,"skipped":0,"pct":0},"lines":{"total":0,"covered":0,"skipped":0,"pct":0}}}'
   fi
 
@@ -176,8 +189,18 @@ get_coverage_color() {
   get_coverage_diff() {
     local current=$1
     local metric=$2
+    echo "🔍 カバレッジ差分を計算中..."
+    echo "  - 現在の値: $current"
+    echo "  - メトリクス: $metric"
+    
     if [ -n "$PREV_COVERAGE" ]; then
+      echo "  - 前回のカバレッジデータを検出しました"
       local prev=$(echo "$PREV_COVERAGE" | jq -r ".$metric.pct" 2>/dev/null || echo "0")
+      echo "  - 前回の値: $prev"
+    else
+      echo "⚠️ 前回のカバレッジデータがありません"
+      local prev="0"
+    fi
       local diff=$(echo "$current - $prev" | bc -l 2>/dev/null || echo "0")
       if (( $(echo "$diff > 0" | bc -l) )); then
         echo "🟢 +${diff}%"
