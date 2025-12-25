@@ -133,6 +133,10 @@ IFS='|' read -r statements branches functions lines <<< "$(echo "$COVERAGE_DATA"
   
 # デバッグ用に各変数の値を表示
 echo "Parsed values - statements: $statements, branches: $branches, functions: $functions, lines: $lines"
+  
+get_coverage_color() {
+    local value=${1%%%}  # パーセント記号を削除
+    local coverage=$(printf "%.0f" "$value" 2>/dev/null || echo "0")
     if [ "$coverage" -lt 80 ]; then
       echo "#e05d44"  # 赤
     elif [ "$coverage" -lt 90 ]; then
