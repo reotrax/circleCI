@@ -1,13 +1,43 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# jq のインストールチェックとインストール
+if ! command -v jq &> /dev/null; then
+    echo "jq がインストールされていません。インストールを試みます..."
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        if [ "$ID" = "ubuntu" ] || [ "$ID" = "debian" ]; then
+            sudo apt-get update && sudo apt-get install -y jq
+        elif [ "$ID" = "alpine" ]; then
+            apk add --no-cache jq
+        elif [ "$ID" = "centos" ] || [ "$ID" = "rhel" ]; then
+            sudo yum install -y jq
+        else
+            echo "❌ サポートされていないOSです。手動でjqをインストールしてください。"
+            exit 1
+        fi
+    else
+        echo "❌ OSのバージョンを特定できませんでした。手動でjqをインストールしてください。"
+        exit 1
+    fi
+fi
+
 # エラーが発生した場合にスクリプトを終了する
 handle_error() {
-  echo "❌ エラーが発生しました: 行 $1 でエラーが発生しました。終了します。"
-  exit 1
+  local line_number=$1
+  local exit_code=${2:-1}
+  echo "❌ エラーが発生しました: 行 $line_number でエラーが発生しました。終了コード: $exit_code"
+  echo "=== デバッグ情報 ==="
+  echo "スクリプト: $0"
+  echo "行番号: $line_number"
+  echo "終了コード: $exit_code"
+  echo "現在のディレクトリ: $(pwd)"
+  echo "環境変数:"
+  env | sort
+  exit $exit_code
 }
 
-trap 'handle_error $LINENO' ERR
+trap 'handle_error $LINENO $?' ERR
 
 # スクリプトのディレクトリを取得
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -322,46 +352,71 @@ EOM
   # コメントファイルの内容を確認
   echo "=== 生成されたコメントファイルの内容 ==="
   cat "${PROJECT_ROOT}/pr-comment.md"
-  
-  # コメントファイルのサイズを確認
   echo -e "\nコメントファイルのサイズ: $(wc -c < "${PROJECT_ROOT}/pr-comment.md") バイト"
 
-  # コメントを表示
-  echo -e "\n=== 生成されたコメント ==="
-  cat "${PROJECT_ROOT}/pr-comment.md"
-
-  # GitHub APIを使用してコメントを投稿
-  echo -e "\n=== GitHub PRにコメントを投稿中 ==="
-  COMMENT_URL="https://api.github.com/repos/${CIRCLE_PROJECT_USERNAME:-$CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME:-$CIRCLE_PROJECT_REPONAME}/issues/${PR_NUMBER}/comments"
-  COMMENT_BODY=$(jq -n --arg body "$(cat "${PROJECT_ROOT}/pr-comment.md")" '{"body": $body}')
-
-# デバッグ用にURLとボディを表示
-echo "API URL: $COMMENT_URL"
-echo "コメントボディの長さ: ${#COMMENT_BODY} 文字"
-
-# コメントを投稿
-RESPONSE=$(curl -sS -X POST \
-  -H "Authorization: token $GITHUB_TOKEN" \
-  -H "Accept: application/vnd.github.v3+json"  # コメントをPRに投稿（デバッグ中は出力のみ）
-  echo "=== デバッグ: コメント本文（投稿前） ==="
-  echo -e "$COMMENT_BODY"
+  # コメント本文を変数に読み込む
+  COMMENT_BODY=$(cat "${PROJECT_ROOT}/pr-comment.md")
   
-  # デバッグ中はコメントを投稿しない
-  echo "=== デバッグ: コメントの投稿をスキップします ==="
-  exit 0 \
-  "$COMMENT_URL" 2>&1) || {
-  echo "❌ コメントの投稿に失敗しました"
-  echo "エラー詳細: $RESPONSE"
-  exit 1
+  # GitHubにコメントを投稿する関数を呼び出す
+  if [ -n "$GITHUB_TOKEN" ] && [ -n "$PR_NUMBER" ]; then
+    if ! post_comment "$COMMENT_BODY"; then
+      echo "⚠️ コメントの投稿に失敗しましたが、処理は続行します"
+      exit 0
+    fi
+  else
+    echo "⚠️ GitHubトークンまたはPR番号が設定されていないため、コメントをスキップします"
+    echo "GITHUB_TOKEN: ${GITHUB_TOKEN:+[設定済み]}"
+    echo "PR_NUMBER: ${PR_NUMBER:-[未設定]}"
+    exit 0
+  fi
 }
 
-# レスポンスを確認
-if echo "$RESPONSE" | jq -e '.id' >/dev/null 2>&1; then
-  echo "✅ コメントを正常に投稿しました"
-  echo "コメントURL: $(echo "$RESPONSE" | jq -r '.html_url')"
-else
-  echo "❌ コメントの投稿に失敗しました"
-  echo "エラー: $RESPONSE"
-  exit 1
+# コメントを投稿する関数
+post_comment() {
+    local comment_body="$1"
+    local api_url="https://api.github.com/repos/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}/issues/${PR_NUMBER}/comments"
+    
+    echo "=== GitHub PRにコメントを投稿中 ==="
+    echo "API URL: $api_url"
+    echo "コメントボディの長さ: ${#comment_body} 文字"
+    
+    # JSONペイロードを作成
+    local json_payload
+    json_payload=$(jq -n --arg body "$comment_body" '{body: $body}')
+    
+    # 一時ファイルに保存
+    local temp_file
+    temp_file=$(mktemp)
+    echo "$json_payload" > "$temp_file"
+    
+    # デバッグ用にJSONを表示
+    echo -e "\n=== デバッグ: コメント本文（投稿前） ==="
+    cat "$temp_file" | jq .
+    
+    # curlでリクエストを送信
+    echo -e "\n=== コメントを投稿中... ==="
+    local response
+    response=$(curl -s -S -X POST \
+        -H "Authorization: token $GITHUB_TOKEN" \
+        -H "Accept: application/vnd.github.v3+json" \
+        -H "Content-Type: application/json" \
+        -d "@$temp_file" \
+        "$api_url" 2>&1)
+    
+    local exit_code=$?
+    
+    # 一時ファイルを削除
+    rm -f "$temp_file"
+    
+    if [ $exit_code -eq 0 ]; then
+        echo "✅ コメントを投稿しました"
+        return 0
+    else
+        echo "❌ コメントの投稿に失敗しました"
+        echo "終了コード: $exit_code"
+        echo "エラー詳細: $response"
+        return 1
+    fi
+}
 fi
 
