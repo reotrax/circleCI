@@ -13,16 +13,17 @@ if [ -n "$CIRCLE_PULL_REQUEST" ]; then
   if [ -f "coverage/coverage-summary.json" ]; then
     echo "=== カバレッジ情報を読み込み中 ==="
 
-    # Python3の存在チェック
-    if ! command -v python3 > /dev/null 2>&1; then
-      echo "❌ エラー: カバレッジ解析にはPython3が必要ですが、見つかりませんでした"
-      echo "CircleCI環境にPython3がインストールされていることを確認してください"
+    # jqの存在チェック
+    if ! command -v jq > /dev/null 2>&1; then
+      echo "❌ エラー: カバレッジ解析にはjqが必要ですが、見つかりませんでした"
+      echo "CircleCI環境にjqがインストールされていることを確認してください"
       exit 1
     fi
 
-    # Python3でカバレッジをパース
-    echo "Python3でカバレッジを解析中..."
-    COVERAGE_DATA=$(python3 .circleci/scripts/parse-coverage.py)
+    # シェルスクリプトでカバレッジをパース
+    echo "jqでカバレッジを解析中..."
+    chmod +x .circleci/scripts/parse-coverage.sh
+    COVERAGE_DATA=$(.circleci/scripts/parse-coverage.sh)
 
     if [ -z "$COVERAGE_DATA" ]; then
       echo "❌ エラー: カバレッジデータの解析に失敗しました"

@@ -41,6 +41,17 @@ jobs:
       # カバレッジレポートを保存
       - store_artifacts:
           path: coverage
+          destination: coverage
+
+      # PRにコメントを投稿
+      - run:
+          name: Post test coverage to PR
+          command: |
+            if [ -n "$CIRCLE_PULL_REQUEST" ]; then
+              chmod +x .circleci/scripts/comment-on-pr.sh
+              ./.circleci/scripts/comment-on-pr.sh
+            fi
+          path: coverage
           destination: coverage-report
 
       # ビルド実行
