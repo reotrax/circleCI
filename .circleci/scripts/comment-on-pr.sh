@@ -365,20 +365,20 @@ EOM
   post_comment() {
     local comment_body="$1"
     local api_url="https://api.github.com/repos/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}/issues/${PR_NUMBER}/comments"
-    
+
     echo "=== GitHub PRにコメントを投稿中 ==="
     echo "API URL: $api_url"
     echo "コメントボディの長さ: ${#comment_body} 文字"
-    
+
     # 一時ファイルを作成
     local temp_file
     temp_file=$(mktemp)
     jq -n --arg body "$comment_body" '{body: $body}' > "$temp_file"
-    
+
     # デバッグ用にJSONを表示
     echo -e "\n=== デバッグ: コメント本文（投稿前） ==="
     cat "$temp_file"
-    
+
     # curlでリクエストを送信
     echo -e "\n=== コメントを投稿中... ==="
     local response
