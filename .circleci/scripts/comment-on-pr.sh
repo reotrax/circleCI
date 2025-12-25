@@ -119,10 +119,10 @@ fi
   
   # カバレッジの色を決定（赤: < 80%, 黄: 80-89%, 緑: 90%+）
   get_coverage_color() {
-    local coverage=$1
-    if (( $(echo "$coverage < 80" | bc -l) )); then
+    local coverage=$(printf "%.0f" "$1")
+    if [ "$coverage" -lt 80 ]; then
       echo "#e05d44"  # 赤
-    elif (( $(echo "$coverage < 90" | bc -l) )); then
+    elif [ "$coverage" -lt 90 ]; then
       echo "#dfb317"  # 黄
     else
       echo "#4c1"     # 緑
