@@ -20,10 +20,16 @@ if [ -n "$CIRCLE_PULL_REQUEST" ]; then
       exit 1
     fi
 
-    # シェルスクリプトでカバレッジをパース
+    # シェルスクリプトでカバレッジをパース（絶対パスを使用）
     echo "jqでカバレッジを解析中..."
-    chmod +x .circleci/scripts/parse-coverage.sh
-    COVERAGE_DATA=$(.circleci/scripts/parse-coverage.sh)
+    PARSER_PATH="/root/project/.circleci/scripts/parse-coverage.sh"
+    if [ -f "$PARSER_PATH" ]; then
+      chmod +x "$PARSER_PATH"
+      COVERAGE_DATA=$("$PARSER_PATH")
+    else
+      echo "❌ エラー: パーサースクリプトが見つかりません: $PARSER_PATH"
+      exit 1
+    fi
 
     if [ -z "$COVERAGE_DATA" ]; then
       echo "❌ エラー: カバレッジデータの解析に失敗しました"

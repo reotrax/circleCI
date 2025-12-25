@@ -41,18 +41,24 @@ jobs:
       # カバレッジレポートを保存
       - store_artifacts:
           path: coverage
-          destination: coverage
+          destination: coverage-report
 
       # PRにコメントを投稿
       - run:
           name: Post test coverage to PR
           command: |
             if [ -n "$CIRCLE_PULL_REQUEST" ]; then
-              chmod +x .circleci/scripts/comment-on-pr.sh
-              ./.circleci/scripts/comment-on-pr.sh
+              # 絶対パスを使用
+              SCRIPT_PATH="/root/project/.circleci/scripts/comment-on-pr.sh"
+              if [ -f "$SCRIPT_PATH" ]; then
+                chmod +x "$SCRIPT_PATH"
+                "$SCRIPT_PATH"
+              else
+                echo "Error: Script not found at $SCRIPT_PATH"
+                ls -la /root/project/.circleci/scripts/
+                exit 1
+              fi
             fi
-          path: coverage
-          destination: coverage-report
 
       # ビルド実行
       - run:
