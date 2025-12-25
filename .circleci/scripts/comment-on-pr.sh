@@ -249,8 +249,31 @@ get_coverage_color() {
   # 現在のカバレッジデータを取得
   CURRENT_COVERAGE=$(cat "$COVERAGE_FILE" 2>/dev/null || echo "{}")
   
-  # コメント本文を生成
-  cat << EOM
+  # カバレッジの傾向を生成
+  COVERAGE_TREND=""
+  if [ -n "$PREV_COVERAGE" ] && [ "$PREV_COVERAGE" != '{"total":{"statements":{"total":0,"covered":0,"skipped":0,"pct":0},"branches":{"total":0,"covered":0,"skipped":0,"pct":0},"functions":{"total":0,"covered":0,"skipped":0,"pct":0},"lines":{"total":0,"covered":0,"skipped":0,"pct":0}}}' ]; then
+    COVERAGE_TREND="✅ 前回のカバレッジデータと比較しています"
+  else
+    COVERAGE_TREND="ℹ️ 前回のカバレッジデータが見つかりませんでした"
+  fi
+
+  # カバレッジが低下したファイルのメッセージを生成
+  DECREASED_FILES_MSG=""
+  if [ -n "$DECREASED_FILES" ]; then
+    DECREASED_FILES_MSG="### ⚠️ カバレッジが低下したファイル\n\n$DECREASED_FILES"
+  else
+    DECREASED_FILES_MSG="✅ カバレッジの低下は検出されませんでした"
+  fi
+
+  # ファイルごとの詳細を生成
+  FILE_DETAILS=$(
+    echo "$COVERAGE_DATA" | tail -n +2 | head -n 10 | while IFS='|' read -r file s b f l; do
+      echo "| ${file##*/} | ${s}% | ${b}% | ${f}% | ${l}% |"
+    done
+  )
+
+  # コメントファイルに書き込み
+  cat > "${PROJECT_ROOT}/pr-comment.md" << EOM
 ## 🧪 Jest テスト結果
 
 ### カバレッジサマリー
@@ -264,27 +287,16 @@ get_coverage_color() {
 
 ### カバレッジの傾向
 
-$(if [ -n "$PREV_COVERAGE" ] && [ "$PREV_COVERAGE" != '{"total":{"statements":{"total":0,"covered":0,"skipped":0,"pct":0},"branches":{"total":0,"covered":0,"skipped":0,"pct":0},"functions":{"total":0,"covered":0,"skipped":0,"pct":0},"lines":{"total":0,"covered":0,"skipped":0,"pct":0}}}' ]; then
-else
-  echo "ℹ️ 前回のカバレッジデータが見つかりませんでした"
-fi)
+${COVERAGE_TREND}
 
-$(if [ -n "$DECREASED_FILES" ]; then
-  echo "### ⚠️ カバレッジが低下したファイル\n\n$DECREASED_FILES"
-else
-  echo "✅ カバレッジの低下は検出されませんでした"
-fi)
+${DECREASED_FILES_MSG}
 
 <details>
 <summary>📊 ファイルごとの詳細（上位10件）</summary>
 
 | ファイル | ステートメント | ブランチ | 関数 | 行 |
 |----------|----------------|----------|------|----|
-$(
-  echo "$COVERAGE_DATA" | tail -n +2 | head -n 10 | while IFS='|' read -r file s b f l; do
-    echo "| ${file##*/} | ${s}% | ${b}% | ${f}% | ${l}% |"
-  done
-)
+${FILE_DETAILS}
 </details>
 
 <details>
