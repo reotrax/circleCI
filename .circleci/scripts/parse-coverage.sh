@@ -25,26 +25,38 @@ fi
 echo "=== カバレッジ解析を開始します ==="
 echo "カバレッジファイル: $COVERAGE_FILE"
 
+# デバッグ用にカバレッジファイルの内容を表示
+echo "=== カバレッジファイルの内容（先頭20行）==="
+head -n 20 "$COVERAGE_FILE" || echo "ファイルの読み込みに失敗しました"
+echo "======================================="
+
 # 全体カバレッジを抽出
 TOTAL_STATEMENTS=$(jq -r '.total.statements.pct' "$COVERAGE_FILE" 2>/dev/null || echo "0")
 TOTAL_BRANCHES=$(jq -r '.total.branches.pct' "$COVERAGE_FILE" 2>/dev/null || echo "0")
 TOTAL_FUNCTIONS=$(jq -r '.total.functions.pct' "$COVERAGE_FILE" 2>/dev/null || echo "0")
 TOTAL_LINES=$(jq -r '.total.lines.pct' "$COVERAGE_FILE" 2>/dev/null || echo "0")
 
-# 数値チェック
-re='^[0-9]+([.][0-9]+)?$'
-if ! [[ $TOTAL_STATEMENTS =~ $re ]]; then TOTAL_STATEMENTS=0; fi
-if ! [[ $TOTAL_BRANCHES =~ $re ]]; then TOTAL_BRANCHES=0; fi
-if ! [[ $TOTAL_FUNCTIONS =~ $re ]]; then TOTAL_FUNCTIONS=0; fi
-if ! [[ $TOTAL_LINES =~ $re ]]; then TOTAL_LINES=0; fi
+# デバッグ用に抽出した値を表示
+echo "抽出した値:"
+echo "STATEMENTS: $TOTAL_STATEMENTS"
+echo "BRANCHES: $TOTAL_BRANCHES"
+echo "FUNCTIONS: $TOTAL_FUNCTIONS"
+echo "LINES: $TOTAL_LINES"
 
-# 全体カバレッジを出力
-echo "${TOTAL_STATEMENTS}|${TOTAL_BRANCHES}|${TOTAL_FUNCTIONS}|${TOTAL_LINES}"
+# 数値チェック（nullや不正な値を0に置換）
+re='^[0-9]+([.][0-9]+)?$'
+[[ $TOTAL_STATEMENTS =~ $re ]] || TOTAL_STATEMENTS=0
+[[ $TOTAL_BRANCHES =~ $re ]] || TOTAL_BRANCHES=0
+[[ $TOTAL_FUNCTIONS =~ $re ]] || TOTAL_FUNCTIONS=0
+[[ $TOTAL_LINES =~ $re ]] || TOTAL_LINES=0
+
+# 全体カバレッジを出力（フォーマットを固定）
+printf "%s|%s|%s|%s\n" "$TOTAL_STATEMENTS" "$TOTAL_BRANCHES" "$TOTAL_FUNCTIONS" "$TOTAL_LINES"
 
 # ファイルごとのカバレッジを抽出
 jq -r 'to_entries[] | 
-  select(.key != "total" and (.key | contains("src/"))) | 
-  "FILE|\(.key)|\(.value.statements.pct)|\(.value.branches.pct)|\(.value.functions.pct)|\(.value.lines.pct)"' \
+  select(.key != "total" and (.key | contains("src/") or contains("test/"))) | 
+  "\(.key)|\(.value.statements.pct // 0)|\(.value.branches.pct // 0)|\(.value.functions.pct // 0)|\(.value.lines.pct // 0)"' \
   "$COVERAGE_FILE" 2>/dev/null || echo "WARN: ファイルごとのカバレッジ情報を抽出できませんでした"
 
 echo "=== カバレッジ解析が完了しました ==="
